@@ -257,6 +257,7 @@ function render() {
   const cross = xYear ? [{ xAxis: String(xYear), yAxis: s.S5[s.years.indexOf(xYear)] }] : [];
 
   chart.setOption({
+    animation: false,   // instant redraw on slider drag -> 2034 line stays fixed
     textStyle: { fontFamily: "DM Sans, sans-serif", color: "#1b1f2a" },
     grid: { left: 64, right: 24, top: 54, bottom: 48 },
     title: {
