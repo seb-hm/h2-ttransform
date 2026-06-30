@@ -217,17 +217,27 @@ export function computeSeries(model, levers = {}, years) {
   return out;
 }
 
-// ---- learning bands (pess/opt) around S5 and PEM (mirror crossover_v6) -----
+// ---- learning bands (pess/opt) around S5 and PEM (mirror crossover_v6) ------
+// The band is centred on the CURRENT learning-rate levers (so it tracks the
+// sliders), spanning the same half-width as the documented default ranges.
+// At the snapshot defaults the central rates equal the range midpoints, so this
+// reproduces the Python reference exactly (parity preserved).
 export function computeBands(model, levers = {}, years) {
   const d = model.defaults;
-  const [ppaP, ppaO] = d.ppa_decline_range;
-  const [soecP, soecO] = d.soec_decline_range;
-  const [pemP, pemO] = d.pem_decline_range;
-  const s5Pess = computeSeries(model, { ...levers, soec_decline: soecP, ppa_decline: ppaP }, years).S5;
-  const s5Opt = computeSeries(model, { ...levers, soec_decline: soecO, ppa_decline: ppaO }, years).S5;
-  const pemPess = computeSeries(model, { ...levers, pem_decline: pemP, ppa_decline: ppaP }, years).PEM_PPA;
-  const pemOpt = computeSeries(model, { ...levers, pem_decline: pemO, ppa_decline: ppaO }, years).PEM_PPA;
-  return { S5_pess: s5Pess, S5_opt: s5Opt, PEM_pess: pemPess, PEM_opt: pemOpt };
+  const L = resolveLevers(model, levers);
+  const half = (r) => (r[1] - r[0]) / 2;
+  const hPpa = half(d.ppa_decline_range);
+  const hSoec = half(d.soec_decline_range);
+  const hPem = half(d.pem_decline_range);
+  const clamp = (x) => Math.max(0, x);          // decline rate can't go negative
+  const ppaPess = clamp(L.ppa_decline - hPpa), ppaOpt = L.ppa_decline + hPpa;
+  const soecPess = clamp(L.soec_decline - hSoec), soecOpt = L.soec_decline + hSoec;
+  const pemPess = clamp(L.pem_decline - hPem), pemOpt = L.pem_decline + hPem;
+  const s5Pess = computeSeries(model, { ...levers, soec_decline: soecPess, ppa_decline: ppaPess }, years).S5;
+  const s5Opt = computeSeries(model, { ...levers, soec_decline: soecOpt, ppa_decline: ppaOpt }, years).S5;
+  const pemPessS = computeSeries(model, { ...levers, pem_decline: pemPess, ppa_decline: ppaPess }, years).PEM_PPA;
+  const pemOptS = computeSeries(model, { ...levers, pem_decline: pemOpt, ppa_decline: ppaOpt }, years).PEM_PPA;
+  return { S5_pess: s5Pess, S5_opt: s5Opt, PEM_pess: pemPessS, PEM_opt: pemOptS };
 }
 
 // crossover year of SOEC (S5) vs grey (S1), or null if they never cross.
