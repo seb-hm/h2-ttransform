@@ -3,20 +3,17 @@
 // so the static terminal can sweep parameters without a backend. Verified to
 // the cent against Python via parity_check.mjs (data/parity_reference.json).
 //
-// Classic script (no DOM, no I/O): works both in the browser (exposes a global
-// `TEA`) and under Node `require` (module.exports) so the same file backs the
-// terminal AND parity_check.js. The caller passes the parsed params.json.
+// ES module: clean scope, no globals. Imported by index.html and parity_check.mjs.
 
 const H2_LHV_KWH_PER_KG = 33.33;
 const SCENARIOS = ["S1", "S2", "S3", "S4", "S5"];
 
 // ---- model assembly (parsed params.json -> convenient maps) ----------------
-function buildModel(params) {
+export function buildModel(params) {
   const P = { ...params.scalars };
   const cpi = Object.fromEntries(params.tables.cpi);
   const carbon = Object.fromEntries(params.tables.carbon_nom_eur);
   const phase = Object.fromEntries(params.tables.cbam_phase_factor);
-  // exact kWh-per-MMBtu implied by the snapshot (so the NG slider is consistent)
   const ngKwhPerMMBtu = P.SMR_NGprice_MMBtu / P.SMR_NGprice;
   return { P, cpi, carbon, phase, defaults: params.trajectory_defaults, ngKwhPerMMBtu };
 }
@@ -24,7 +21,7 @@ function buildModel(params) {
 const lc = (v) => String(v).trim().toLowerCase();
 
 // ---- lever resolution: defaults come from the snapshot ---------------------
-function resolveLevers(model, levers = {}) {
+export function resolveLevers(model, levers = {}) {
   const { P, defaults } = model;
   const pick = (v, d) => (v === undefined || v === null ? d : v);
   return {
@@ -43,7 +40,7 @@ function resolveLevers(model, levers = {}) {
   };
 }
 
-// Apply the scalar (non-year) lever overrides to a copy of P.
+// Apply scalar (non-year) lever overrides to a copy of P.
 function basePForLevers(model, L) {
   const P = { ...model.P };
   P.WACC = L.wacc;
@@ -79,7 +76,7 @@ function benchmarkProtected(model, year) {
   return bench * cbamFactor(model, year);
 }
 
-function cbamPerKg(model, L, embodiedTco2PerTnh3, year) {
+export function cbamPerKg(model, L, embodiedTco2PerTnh3, year) {
   const carbon = carbonRealUsd(model, L, year);
   let perT;
   if (!L.phase_on) {
@@ -105,7 +102,6 @@ function scaledParams(model, P, L, year) {
   Py.PEM_TASC_USD = P.PEM_TASC_USD * pf;
   Py.PEM_stack_cost = P.PEM_stack_cost * pf;
   Py.LCOE_PPA = P.LCOE_PPA * ppaf;
-  // S4 grid greening: linear from snapshot GridRE_sel to grid_re_end
   let re;
   const start = P.GridRE_sel;
   if (year <= L.base_year) re = start;
@@ -120,7 +116,7 @@ function scaledParams(model, P, L, year) {
 }
 
 // ---- core compute (mirror engine.compute) ----------------------------------
-function compute(model, P) {
+export function compute(model, P) {
   const wacc = P.WACC, n = P.Lifetime;
   const cap = P.H2_capacity_MW, CF = P.CF_plant, oph = P.OpHours;
   const cr = crf(wacc, n);
@@ -181,7 +177,6 @@ function compute(model, P) {
     const scope2 = kwh[sc] * ef[sc];
     const totalCo2 = direct + scope2;
 
-    // base-year internal CBAM (used only for the base-case parity check)
     const embodied = (totalCo2 * P.H2_per_NH3) / 1000;
     let cbamT;
     if (lc(P.CBAM_phase_sel) === "off") cbamT = embodied * P.Carbon_USD;
@@ -198,14 +193,13 @@ function compute(model, P) {
   return out;
 }
 
-// ---- base case (current RefYear, snapshot or lever-adjusted) ---------------
-function computeBaseCase(model, levers = {}) {
+export function computeBaseCase(model, levers = {}) {
   const L = resolveLevers(model, levers);
   return compute(model, basePForLevers(model, L));
 }
 
 // ---- the three time-series the terminal plots (mirror crossover_v3) --------
-function computeSeries(model, levers = {}, years) {
+export function computeSeries(model, levers = {}, years) {
   const L = resolveLevers(model, levers);
   const P0 = basePForLevers(model, L);
   const yrs = years || range(model.P.RefYear | 0, 2040);
@@ -224,7 +218,7 @@ function computeSeries(model, levers = {}, years) {
 }
 
 // ---- learning bands (pess/opt) around S5 and PEM (mirror crossover_v6) -----
-function computeBands(model, levers = {}, years) {
+export function computeBands(model, levers = {}, years) {
   const d = model.defaults;
   const [ppaP, ppaO] = d.ppa_decline_range;
   const [soecP, soecO] = d.soec_decline_range;
@@ -237,7 +231,7 @@ function computeBands(model, levers = {}, years) {
 }
 
 // crossover year of SOEC (S5) vs grey (S1), or null if they never cross.
-function crossoverYear(series) {
+export function crossoverYear(series) {
   for (let i = 0; i < series.years.length; i++) {
     if (series.S5[i] <= series.S1[i]) return series.years[i];
   }
@@ -249,11 +243,3 @@ function range(a, b) {
   for (let y = a; y <= b; y++) r.push(y);
   return r;
 }
-
-// ---- export to both worlds: Node (require) and the browser (global TEA) -----
-const TEA = {
-  buildModel, resolveLevers, cbamPerKg, compute,
-  computeBaseCase, computeSeries, computeBands, crossoverYear,
-};
-if (typeof module !== "undefined" && module.exports) module.exports = TEA;
-else (typeof window !== "undefined" ? window : globalThis).TEA = TEA;
