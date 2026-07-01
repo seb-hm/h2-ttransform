@@ -253,9 +253,10 @@ function render() {
   const pemDelta = b.PEM_pess.map((v, i) => v - b.PEM_opt[i]);
   const xYear = crossoverYear(s);
   const cross = xYear ? [{ xAxis: String(xYear), yAxis: s.S5[s.years.indexOf(xYear)] }] : [];
-  // keep the parity label inside the plot: flip it left near the right edge
+  // parity label: always ABOVE the line (readable), nudged left near the right
+  // edge so it never clips.
   const nearEnd = xYear && xYear >= s.years[s.years.length - 1] - 2;
-  const parityPos = nearEnd ? "left" : "top";
+  const parityOffset = nearEnd ? [-48, 0] : [0, 0];
 
   chart.setOption({
     animation: false,   // instant redraw on slider drag -> 2034 line stays fixed
@@ -307,7 +308,8 @@ function render() {
         markPoint: cross.length ? {
           symbol: "circle", symbolSize: 11,
           itemStyle: { color: "#fff", borderColor: COL.S5, borderWidth: 2.5 },
-          label: { show: true, position: parityPos, distance: 8, formatter: "parity " + xYear,
+          label: { show: true, position: "top", distance: 10, offset: parityOffset,
+            formatter: "parity " + xYear,
             fontFamily: "DM Sans", fontSize: 11, fontWeight: 700, color: COL.S5 },
           data: cross,
         } : { data: [] },
