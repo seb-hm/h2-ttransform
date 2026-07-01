@@ -121,7 +121,6 @@
 <header>
   <h1>H<sub>2</sub>-TTransform · LCOH Terminal</h1>
   <span class="sub">Grey SMR vs. electrolysis-based H₂ in Trinidad — real 2026 USD/kg, incl. CBAM</span>
-  <span class="tag" id="ng-tag">live model</span>
 </header>
 
 <div class="app">
@@ -254,6 +253,9 @@ function render() {
   const pemDelta = b.PEM_pess.map((v, i) => v - b.PEM_opt[i]);
   const xYear = crossoverYear(s);
   const cross = xYear ? [{ xAxis: String(xYear), yAxis: s.S5[s.years.indexOf(xYear)] }] : [];
+  // keep the parity label inside the plot: flip it left near the right edge
+  const nearEnd = xYear && xYear >= s.years[s.years.length - 1] - 2;
+  const parityPos = nearEnd ? "left" : "top";
 
   chart.setOption({
     animation: false,   // instant redraw on slider drag -> 2034 line stays fixed
@@ -305,7 +307,7 @@ function render() {
         markPoint: cross.length ? {
           symbol: "circle", symbolSize: 11,
           itemStyle: { color: "#fff", borderColor: COL.S5, borderWidth: 2.5 },
-          label: { show: true, position: "top", formatter: "parity " + xYear,
+          label: { show: true, position: parityPos, distance: 8, formatter: "parity " + xYear,
             fontFamily: "DM Sans", fontSize: 11, fontWeight: 700, color: COL.S5 },
           data: cross,
         } : { data: [] },
@@ -345,7 +347,6 @@ async function main() {
   try {
     const params = await (await fetch("./data/params.json")).json();
     model = buildModel(params);
-    $("ng-tag").textContent = "snapshot " + params.meta.exported;
     buildControls(params);
     chart = echarts.init($("chart"));
     window.addEventListener("resize", () => chart.resize());
